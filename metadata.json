@@ -1,0 +1,5 @@
+{
+  "name": "Draft Soccer Manager",
+  "description": "Una aplicación profesional para gestionar el draft de un torneo de fútbol, permitiendo el alta de jugadores, selección de delegados y un sistema de elección tipo 'Snake Draft' con visualización por posiciones.",
+  "requestFramePermissions": []
+}
