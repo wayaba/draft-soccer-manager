@@ -27,6 +27,8 @@ export const PositionNames: Record<number, string> = {
   11: "Delantero Der. (11)"
 };
 
+export type UserRole = 'ADMIN' | 'DELEGADO' | 'JUGADOR';
+
 export type PlayerReference = 
   | "Padre de Alumno" 
   | "Ex Alumno Egresado >34" 
@@ -48,19 +50,27 @@ export interface Player {
   secondaryPos: number;
   reference: PlayerReference;
   teamId?: string;
+  role: UserRole;
 }
 
 export interface Team {
   id: string;
   name: string;
+  delegateId: string; // Referencia al ID del jugador que es delegado
   delegateName: string;
   players: Player[];
 }
 
 export interface DraftState {
   isStarted: boolean;
-  currentTurnIndex: number; // Index in the order array
-  turnOrder: string[]; // Array of team IDs
+  currentTurnIndex: number;
+  turnOrder: string[]; 
   isSnakeReversed: boolean;
-  history: string[]; // Player IDs selected
+  history: string[]; 
+}
+
+export interface AuthSession {
+  userId: string;
+  role: UserRole;
+  name: string;
 }

@@ -34,6 +34,7 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Fix: Added missing 'role' property (1-based line 37 area)
     const newPlayer: Player = {
       id: crypto.randomUUID(),
       dni: formData.dni || '',
@@ -44,7 +45,8 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
       email: formData.email || '',
       primaryPos: Number(formData.primaryPos),
       secondaryPos: Number(formData.secondaryPos),
-      reference: formData.reference as PlayerReference || 'Otro'
+      reference: formData.reference as PlayerReference || 'Otro',
+      role: 'JUGADOR'
     };
     onAddPlayer(newPlayer);
     setFormData({ primaryPos: 1, secondaryPos: 8, reference: "Otro" });
@@ -59,6 +61,7 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
       let sPos = Math.floor(Math.random() * 11) + 1;
       while (sPos === pPos) sPos = Math.floor(Math.random() * 11) + 1;
 
+      // Fix: Added missing 'role' property (1-based line 62 area)
       const newPlayer: Player = {
         id: crypto.randomUUID(),
         dni: Math.floor(10000000 + Math.random() * 40000000).toString(),
@@ -69,7 +72,8 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
         email: `${fName.toLowerCase()}.${lName.toLowerCase()}@example.com`,
         primaryPos: pPos,
         secondaryPos: sPos,
-        reference: REFERENCES[Math.floor(Math.random() * REFERENCES.length)]
+        reference: REFERENCES[Math.floor(Math.random() * REFERENCES.length)],
+        role: 'JUGADOR'
       };
       onAddPlayer(newPlayer);
     }
