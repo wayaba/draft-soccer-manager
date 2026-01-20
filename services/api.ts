@@ -1,7 +1,7 @@
 import { LoginResponse } from '../types'
 
-const API_URL = 'http://localhost:3001'
-const USE_MOCK = false // Cambiar a false para conectar con el backend real
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || false
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
