@@ -1,15 +1,14 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Player, PlayerReference, PositionNames, UserRole, getAvailableSecondaryPositions } from '../types'
 import { Trophy, UserPlus, LogIn, ShieldCheck, Database, AlertCircle } from 'lucide-react'
 import { validateName, validateBirthDate, validateDNI, validatePhone, validateEmail, FormErrors } from '../utils/validation'
+import { api } from '../services/api'
 
 interface Props {
   onLogin: (user: Player | 'ADMIN') => void
-  onRegister: (player: Player) => void
-  players: Player[]
 }
 
-const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
+const Login: React.FC<Props> = ({ onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -19,6 +18,7 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
   const [isRegistering2, setIsRegistering2] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [formErrors, setFormErrors] = useState<FormErrors>({})
+  const [players, setPlayers] = useState<Player[]>([])
 
   // Image upload state
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -31,6 +31,18 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
     secondaryPos: 7,
     reference: 'Otro'
   })
+
+  // Cargar players solo cuando sea necesario para el login
+  const loadPlayersForLogin = async () => {
+    if (players.length === 0) {
+      try {
+        const playersData = await api.getPlayers()
+        setPlayers(playersData || [])
+      } catch (error) {
+        console.log('No se pudieron cargar los jugadores para login, continuando sin ellos')
+      }
+    }
+  }
 
   // Función helper para obtener error de un campo específico
   const getFieldError = (fieldName: string): string | undefined => {
@@ -65,6 +77,9 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
       if (loginResponse.user.tipo === 'admin') {
         onLogin('ADMIN')
       } else {
+        // Cargar players para buscar el jugador
+        await loadPlayersForLogin()
+
         // Buscar el jugador en la lista local o crear uno temporal
         const player = players.find((p) => p.email === email)
         if (player) {
@@ -226,7 +241,8 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
         role: 'JUGADOR'
       }
 
-      onRegister(newPlayer)
+      // Crear el jugador usando la API directamente
+      await api.createPlayer(newPlayer)
       setSuccessMessage('¡Registro exitoso! Redirigiendo al login...')
 
       // Limpiar formulario
