@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { DataProvider, useData } from './contexts/DataContext'
 import { Layout } from './components/layout/Layout'
 import { DashboardView, PlayersView, TeamsView, UsersView, DraftView } from './components/views'
-import Login from './components/Login'
+import AuthFlow from './components/AuthFlow'
 import { useNavigation } from './hooks/useNavigation'
 import { RefreshCcw } from 'lucide-react'
 
@@ -24,7 +24,7 @@ const AppContent: React.FC = () => {
   }
 
   if (!session) {
-    return <Login onLogin={login} players={players} onRegister={addPlayer} />
+    return <AuthFlow onLogin={login} />
   }
 
   const renderCurrentView = () => {
