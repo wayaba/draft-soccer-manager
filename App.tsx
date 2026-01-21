@@ -3,11 +3,12 @@ import { Player, Team, DraftState, AuthSession } from './types'
 import PlayerRegistration from './components/PlayerRegistration'
 import TeamSetup from './components/TeamSetup'
 import DraftBoard from './components/DraftBoard'
+import AdminUserManagement from './components/AdminUserManagement'
 import Login from './components/Login'
 import { api } from './services/api'
-import { UserPlus, Users, Trophy, LayoutDashboard, LogOut, ShieldCheck, User, RefreshCcw } from 'lucide-react'
+import { UserPlus, Users, Trophy, LayoutDashboard, LogOut, ShieldCheck, User, RefreshCcw, Star } from 'lucide-react'
 
-type View = 'players' | 'teams' | 'draft' | 'dashboard'
+type View = 'players' | 'teams' | 'draft' | 'dashboard' | 'users'
 
 const App: React.FC = () => {
   const [session, setSession] = useState<AuthSession | null>(null)
@@ -89,6 +90,13 @@ const App: React.FC = () => {
       } catch (error) {
         console.error('Error cargando datos:', error)
       }
+    } else if (newView === 'users' && session?.role === 'ADMIN') {
+      try {
+        const players = await api.getPlayers()
+        setPlayers(players || [])
+      } catch (error) {
+        console.error('Error cargando usuarios:', error)
+      }
     }
   }
 
@@ -169,6 +177,12 @@ const App: React.FC = () => {
                 <UserPlus size={20} /> Jugadores
               </button>
               <button
+                onClick={() => handleViewChange('users')}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'users' ? 'bg-emerald-600 shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
+              >
+                <Star size={20} /> Gestión Usuarios
+              </button>
+              <button
                 onClick={() => handleViewChange('teams')}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${view === 'teams' ? 'bg-emerald-600 shadow-lg' : 'text-slate-400 hover:bg-slate-800'}`}
               >
@@ -236,6 +250,20 @@ const App: React.FC = () => {
             onStartDraft={handleStartDraft}
             resetDraft={() => {}}
             isDraftStarted={draftState.isStarted}
+          />
+        )}
+
+        {view === 'users' && session.role === 'ADMIN' && (
+          <AdminUserManagement
+            players={players}
+            onPlayersUpdate={async () => {
+              try {
+                const updatedPlayers = await api.getPlayers()
+                setPlayers(updatedPlayers || [])
+              } catch (error) {
+                console.error('Error actualizando jugadores:', error)
+              }
+            }}
           />
         )}
 

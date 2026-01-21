@@ -131,6 +131,29 @@ export const validateEmail = (value: string): ValidationResult => {
   return { isValid: true }
 }
 
+// Validación de puntaje (específico para actualizar solo el puntaje)
+export const validatePuntaje = (value: number | string): ValidationResult => {
+  if (value === undefined || value === null || value === '') {
+    return { isValid: false, message: 'El puntaje es requerido' }
+  }
+
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+
+  if (isNaN(numValue)) {
+    return { isValid: false, message: 'El puntaje debe ser un número válido' }
+  }
+
+  if (numValue < 0) {
+    return { isValid: false, message: 'El puntaje no puede ser menor a 0' }
+  }
+
+  if (numValue > 100) {
+    return { isValid: false, message: 'El puntaje no puede ser mayor a 100' }
+  }
+
+  return { isValid: true }
+}
+
 // Validación completa del formulario
 export const validatePlayerForm = (formData: any): { isValid: boolean; errors: FormErrors } => {
   const errors: FormErrors = {}

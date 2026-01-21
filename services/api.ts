@@ -139,7 +139,8 @@ export const api = {
       secondaryPos: user.posicionSecundaria || 7,
       role: user.tipo === 'admin' ? 'ADMIN' : user.tipo === 'delegado' ? 'DELEGADO' : 'JUGADOR',
       teamId: user.teamId,
-      avatar: user.avatar?.secure_url || null
+      avatar: user.avatar?.secure_url || null,
+      puntaje: user.puntaje // Mapear el campo puntaje desde el backend
     }))
   },
 
@@ -300,6 +301,44 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state)
     })
+    return res.json()
+  },
+
+  async updatePuntaje(userId: string, puntaje: number) {
+    if (USE_MOCK) {
+      await delay(300)
+      // Mock: actualizar en localStorage
+      const players = getMockData('players')
+      const playerIndex = players.findIndex((p: any) => p.id === userId)
+      if (playerIndex !== -1) {
+        players[playerIndex] = { ...players[playerIndex], puntaje }
+        saveMockData('players', players)
+        return { success: true, message: 'Puntaje actualizado exitosamente' }
+      }
+      throw new Error('Usuario no encontrado')
+    }
+
+    const token = localStorage.getItem('auth_token')
+    const res = await fetch(`${API_URL}/users/${userId}/puntaje`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ puntaje })
+    })
+
+    if (!res.ok) {
+      let errorMessage = 'Error al actualizar puntaje'
+      try {
+        const errorData = await res.json()
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch (parseError) {
+        errorMessage = `Error ${res.status}: ${res.statusText}`
+      }
+      throw new Error(errorMessage)
+    }
+
     return res.json()
   }
 }

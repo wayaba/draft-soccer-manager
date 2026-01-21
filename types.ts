@@ -75,6 +75,7 @@ export interface Player {
   teamId?: string
   role: UserRole
   avatar?: string // URL del avatar o base64 de la imagen
+  puntaje?: number // Puntaje del jugador (0-100)
 }
 
 export interface Team {
