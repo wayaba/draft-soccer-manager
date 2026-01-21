@@ -12,6 +12,21 @@ export enum PosicionJugador {
   DELANTERO_IZQ = 11
 }
 
+export enum EstadoJugador {
+  ACTIVO = 1,
+  EVENTUAL = 2,
+  LISTA_ESPERA = 3,
+  BAJA = 4
+}
+
+// Mapeo de estados para mostrar descripciones en el frontend
+export const EstadoJugadorDescripcion = {
+  [EstadoJugador.ACTIVO]: 'Activo',
+  [EstadoJugador.EVENTUAL]: 'Eventual',
+  [EstadoJugador.LISTA_ESPERA]: 'Lista de Espera',
+  [EstadoJugador.BAJA]: 'Baja'
+} as const
+
 // Mapeo de posiciones para mostrar descripciones completas en el frontend
 export const PosicionJugadorDescripcion = {
   [PosicionJugador.ARQUERO]: '1 - Arquero',
@@ -76,6 +91,7 @@ export interface Player {
   role: UserRole
   avatar?: string // URL del avatar o base64 de la imagen
   puntaje?: number // Puntaje del jugador (0-100)
+  estado?: EstadoJugador // Estado del jugador
 }
 
 export interface Team {

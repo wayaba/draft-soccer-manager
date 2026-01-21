@@ -1,4 +1,4 @@
-import { LoginResponse } from '../types'
+import { LoginResponse, EstadoJugador } from '../types'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || false
@@ -58,7 +58,7 @@ export const api = {
     for (const [key, value] of formData.entries()) {
       if (key === 'isActive') {
         jsonData[key] = value === 'true' // Boolean
-      } else if (key === 'posicionPrimaria' || key === 'posicionSecundaria') {
+      } else if (key === 'posicionPrimaria' || key === 'posicionSecundaria' || key === 'estado') {
         jsonData[key] = parseInt(value as string) // Número para enum
       } else if (key === 'dni') {
         jsonData[key] = parseInt(value as string) // DNI como número
@@ -140,7 +140,8 @@ export const api = {
       role: user.tipo === 'admin' ? 'ADMIN' : user.tipo === 'delegado' ? 'DELEGADO' : 'JUGADOR',
       teamId: user.teamId,
       avatar: user.avatar?.secure_url || null,
-      puntaje: user.puntaje // Mapear el campo puntaje desde el backend
+      puntaje: user.puntaje, // Mapear el campo puntaje desde el backend
+      estado: user.estado // Mapear el campo estado desde el backend
     }))
   },
 
@@ -330,6 +331,44 @@ export const api = {
 
     if (!res.ok) {
       let errorMessage = 'Error al actualizar puntaje'
+      try {
+        const errorData = await res.json()
+        errorMessage = errorData.message || errorData.error || errorMessage
+      } catch (parseError) {
+        errorMessage = `Error ${res.status}: ${res.statusText}`
+      }
+      throw new Error(errorMessage)
+    }
+
+    return res.json()
+  },
+
+  async updatePlayerStatus(userId: string, estado: EstadoJugador) {
+    if (USE_MOCK) {
+      await delay(300)
+      // Mock: actualizar en localStorage
+      const players = getMockData('players')
+      const playerIndex = players.findIndex((p: any) => p.id === userId)
+      if (playerIndex !== -1) {
+        players[playerIndex] = { ...players[playerIndex], estado }
+        saveMockData('players', players)
+        return { success: true, message: 'Estado actualizado exitosamente' }
+      }
+      throw new Error('Usuario no encontrado')
+    }
+
+    const token = localStorage.getItem('auth_token')
+    const res = await fetch(`${API_URL}/users/${userId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: token ? `Bearer ${token}` : '',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ estado })
+    })
+
+    if (!res.ok) {
+      let errorMessage = 'Error al actualizar estado'
       try {
         const errorData = await res.json()
         errorMessage = errorData.message || errorData.error || errorMessage

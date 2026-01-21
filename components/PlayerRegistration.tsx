@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { Player, PlayerReference, PositionNames, getAvailableSecondaryPositions } from '../types'
+import { Player, PlayerReference, PositionNames, getAvailableSecondaryPositions, EstadoJugador, EstadoJugadorDescripcion } from '../types'
 import { Plus, Search, Trash2, UserCircle, Database, Upload, X, AlertCircle } from 'lucide-react'
 import Avatar from './Avatar'
 import { compressImage, isValidImageFile, formatFileSize } from '../utils/imageUtils'
@@ -69,10 +69,11 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
   const [isSubmitting, setIsSubmitting] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
 
-  const [formData, setFormData] = useState<Partial<Player>>({
+  const [formData, setFormData] = useState<Partial<Player> & { isEventual?: boolean }>({
     primaryPos: 1,
     secondaryPos: 2,
-    reference: 'Otro'
+    reference: 'Otro',
+    isEventual: false
   })
 
   // Función helper para obtener error de un campo específico
@@ -315,7 +316,8 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
       secondaryPos: dataToValidate.secondaryPos,
       reference: (dataToValidate.reference as PlayerReference) || 'Otro',
       role: 'JUGADOR',
-      avatar: imagePreview || undefined
+      avatar: imagePreview || undefined,
+      estado: formData.isEventual ? EstadoJugador.EVENTUAL : EstadoJugador.ACTIVO
     }
 
     console.log('✅ Jugador creado exitosamente:', newPlayer)
@@ -324,7 +326,7 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
     onAddPlayer(newPlayer)
 
     // Limpiar formulario después del éxito
-    setFormData({ primaryPos: 1, secondaryPos: 2, reference: 'Otro' })
+    setFormData({ primaryPos: 1, secondaryPos: 2, reference: 'Otro', isEventual: false })
     setSelectedImage(null)
     setImagePreview('')
     setFormErrors({})
@@ -355,7 +357,8 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
         primaryPos: pPos,
         secondaryPos: sPos,
         reference: REFERENCES[Math.floor(Math.random() * REFERENCES.length)],
-        role: 'JUGADOR'
+        role: 'JUGADOR',
+        estado: EstadoJugador.ACTIVO
       }
       onAddPlayer(newPlayer)
     }
@@ -393,7 +396,7 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
                 setFormErrors({})
               } else {
                 // Limpiar formulario y errores al cerrar
-                setFormData({ primaryPos: 1, secondaryPos: 2, reference: 'Otro' })
+                setFormData({ primaryPos: 1, secondaryPos: 2, reference: 'Otro', isEventual: false })
                 setSelectedImage(null)
                 setImagePreview('')
                 setFormErrors({})
@@ -415,6 +418,10 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
       {showForm && (
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
           {console.log('📋 Formulario siendo renderizado')}
+          <div className="mb-6">
+            <h3 className="text-2xl font-bold text-slate-800 mb-2">Registrar Jugador</h3>
+            <p className="text-slate-600 text-sm">Complete los datos del nuevo jugador</p>
+          </div>
           <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Nombre</label>
@@ -657,6 +664,25 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
               </select>
             </div>
 
+            {/* Checkbox para jugador eventual */}
+            <div className="md:col-span-3 space-y-3 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="isEventual"
+                  checked={formData.isEventual || false}
+                  onChange={(e) => setFormData({ ...formData, isEventual: e.target.checked })}
+                  className="w-4 h-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                />
+                <label htmlFor="isEventual" className="text-sm font-medium text-slate-700 cursor-pointer">
+                  Jugador eventual
+                </label>
+              </div>
+              <p className="text-xs text-slate-500 ml-7">
+                Los jugadores eventuales no forman parte del plantel fijo y pueden participar ocasionalmente en los partidos.
+              </p>
+            </div>
+
             {/* Campo para avatar */}
             <div className="md:col-span-3 space-y-4 pt-4 border-t border-slate-100">
               <label className="text-sm font-semibold text-slate-700">Foto del Jugador (Opcional)</label>
@@ -767,6 +793,7 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
                 <th className="px-6 py-4">Jugador</th>
                 <th className="px-6 py-4">DNI / Edad</th>
                 <th className="px-6 py-4">Posiciones</th>
+                <th className="px-6 py-4">Estado</th>
                 <th className="px-6 py-4">Tipo</th>
                 {/* <th className="px-6 py-4 text-center">Acción</th> */}
               </tr>
@@ -800,6 +827,23 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
                         S: {PositionNames[p.secondaryPos]}
                       </span>
                     </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        p.estado === EstadoJugador.ACTIVO
+                          ? 'bg-green-100 text-green-700'
+                          : p.estado === EstadoJugador.EVENTUAL
+                            ? 'bg-orange-100 text-orange-700'
+                            : p.estado === EstadoJugador.LISTA_ESPERA
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : p.estado === EstadoJugador.BAJA
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {EstadoJugadorDescripcion[p.estado || EstadoJugador.ACTIVO]}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-slate-600 font-medium">

@@ -38,7 +38,27 @@ const AuthFlow: React.FC<Props> = ({ onLogin }) => {
   return (
     <>
       <Login onLogin={onLogin} onRegister={handleGoToRegister} />
-      {successMessage && <div className="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 font-medium">{successMessage}</div>}
+      {successMessage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 mx-4 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <h3 className="text-lg font-bold text-center text-slate-800 mb-2">¡Registro Exitoso!</h3>
+            <p className="text-center text-slate-600 mb-4">{successMessage}</p>
+            <button
+              onClick={() => setSuccessMessage('')}
+              className="w-full bg-emerald-600 text-white py-3 rounded-xl font-semibold hover:bg-emerald-700 transition-colors"
+            >
+              Continuar
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

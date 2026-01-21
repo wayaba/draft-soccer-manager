@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Player, PositionNames } from '../types'
+import { Player, PositionNames, EstadoJugador, EstadoJugadorDescripcion } from '../types'
 import { Search, Star, Save, X, AlertCircle, CheckCircle } from 'lucide-react'
 import Avatar from './Avatar'
 import { validatePuntaje } from '../utils/validation'
@@ -17,12 +17,19 @@ interface PuntajeEdit {
   errorMessage?: string
 }
 
+interface EstadoEdit {
+  userId: string
+  estado: EstadoJugador
+}
+
 const AdminUserManagement: React.FC<Props> = ({ players, onPlayersUpdate }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterRole, setFilterRole] = useState<'ALL' | 'JUGADOR' | 'DELEGADO'>('ALL')
   const [editingPuntajes, setEditingPuntajes] = useState<{ [key: string]: PuntajeEdit }>({})
   const [savingPuntajes, setSavingPuntajes] = useState<{ [key: string]: boolean }>({})
   const [successMessages, setSuccessMessages] = useState<{ [key: string]: string }>({})
+  const [editingEstados, setEditingEstados] = useState<{ [key: string]: EstadoEdit }>({})
+  const [savingEstados, setSavingEstados] = useState<{ [key: string]: boolean }>({})
 
   // Calcular edad
   const calculateAge = (birthDate: string): number => {
@@ -118,6 +125,66 @@ const AdminUserManagement: React.FC<Props> = ({ players, onPlayersUpdate }) => {
     }
   }
 
+  // Funciones para manejar edición de estados
+  const startEditingEstado = (userId: string, estadoActual?: EstadoJugador) => {
+    setEditingEstados((prev) => ({
+      ...prev,
+      [userId]: {
+        userId,
+        estado: estadoActual || EstadoJugador.ACTIVO
+      }
+    }))
+  }
+
+  const cancelEditEstado = (userId: string) => {
+    setEditingEstados((prev) => {
+      const newState = { ...prev }
+      delete newState[userId]
+      return newState
+    })
+  }
+
+  const handleEstadoChange = (userId: string, nuevoEstado: EstadoJugador) => {
+    setEditingEstados((prev) => ({
+      ...prev,
+      [userId]: {
+        ...prev[userId],
+        estado: nuevoEstado
+      }
+    }))
+  }
+
+  const saveEstado = async (userId: string) => {
+    const edit = editingEstados[userId]
+    if (!edit) return
+
+    setSavingEstados((prev) => ({ ...prev, [userId]: true }))
+
+    try {
+      await api.updatePlayerStatus(userId, edit.estado)
+
+      // Mostrar mensaje de éxito
+      setSuccessMessages((prev) => ({ ...prev, [userId]: 'Estado actualizado exitosamente' }))
+      setTimeout(() => {
+        setSuccessMessages((prev) => {
+          const newState = { ...prev }
+          delete newState[userId]
+          return newState
+        })
+      }, 3000)
+
+      // Limpiar edición
+      cancelEditEstado(userId)
+
+      // Actualizar lista de jugadores
+      onPlayersUpdate()
+    } catch (error: any) {
+      alert(`Error al actualizar estado: ${error.message}`)
+    } finally {
+      setSavingEstados((prev) => ({ ...prev, [userId]: false }))
+    }
+  }
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -165,6 +232,7 @@ const AdminUserManagement: React.FC<Props> = ({ players, onPlayersUpdate }) => {
                 <th className="px-6 py-4">DNI / Edad</th>
                 <th className="px-6 py-4">Posiciones</th>
                 <th className="px-6 py-4">Rol</th>
+                <th className="px-6 py-4 text-center">Estado</th>
                 <th className="px-6 py-4 text-center">Puntaje</th>
                 <th className="px-6 py-4 text-center">Acciones</th>
               </tr>
@@ -174,6 +242,8 @@ const AdminUserManagement: React.FC<Props> = ({ players, onPlayersUpdate }) => {
                 const isEditing = editingPuntajes[user.id]
                 const isSaving = savingPuntajes[user.id]
                 const successMessage = successMessages[user.id]
+                const isEditingEstado = editingEstados[user.id]
+                const isSavingEstado = savingEstados[user.id]
 
                 return (
                   <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
@@ -216,6 +286,40 @@ const AdminUserManagement: React.FC<Props> = ({ players, onPlayersUpdate }) => {
                     </td>
 
                     <td className="px-6 py-4 text-center">
+                      {isEditingEstado ? (
+                        <div className="space-y-1">
+                          <select
+                            className="px-2 py-1 text-xs rounded-lg border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
+                            value={isEditingEstado.estado}
+                            onChange={(e) => handleEstadoChange(user.id, Number(e.target.value) as EstadoJugador)}
+                          >
+                            {Object.entries(EstadoJugadorDescripcion).map(([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            user.estado === EstadoJugador.ACTIVO
+                              ? 'bg-green-100 text-green-700'
+                              : user.estado === EstadoJugador.EVENTUAL
+                                ? 'bg-orange-100 text-orange-700'
+                                : user.estado === EstadoJugador.LISTA_ESPERA
+                                  ? 'bg-yellow-100 text-yellow-700'
+                                  : user.estado === EstadoJugador.BAJA
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {EstadoJugadorDescripcion[user.estado || EstadoJugador.ACTIVO]}
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-6 py-4 text-center">
                       {isEditing ? (
                         <div className="space-y-1">
                           <input
@@ -254,36 +358,72 @@ const AdminUserManagement: React.FC<Props> = ({ players, onPlayersUpdate }) => {
 
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-center gap-2">
-                        {isEditing ? (
+                        {isEditing || isEditingEstado ? (
                           <>
-                            <button
-                              onClick={() => savePuntaje(user.id)}
-                              disabled={!isEditing.isValid || isSaving}
-                              className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Guardar puntaje"
-                            >
-                              {isSaving ? (
-                                <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <Save size={18} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => cancelEdit(user.id)}
-                              disabled={isSaving}
-                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
-                              title="Cancelar"
-                            >
-                              <X size={18} />
-                            </button>
+                            {isEditing && (
+                              <>
+                                <button
+                                  onClick={() => savePuntaje(user.id)}
+                                  disabled={!isEditing.isValid || isSaving}
+                                  className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Guardar puntaje"
+                                >
+                                  {isSaving ? (
+                                    <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Save size={18} />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => cancelEdit(user.id)}
+                                  disabled={isSaving}
+                                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                                  title="Cancelar"
+                                >
+                                  <X size={18} />
+                                </button>
+                              </>
+                            )}
+                            {isEditingEstado && (
+                              <>
+                                <button
+                                  onClick={() => saveEstado(user.id)}
+                                  disabled={isSavingEstado}
+                                  className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Guardar estado"
+                                >
+                                  {isSavingEstado ? (
+                                    <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Save size={18} />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => cancelEditEstado(user.id)}
+                                  disabled={isSavingEstado}
+                                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
+                                  title="Cancelar"
+                                >
+                                  <X size={18} />
+                                </button>
+                              </>
+                            )}
                           </>
                         ) : (
-                          <button
-                            onClick={() => startEditingPuntaje(user.id, user.puntaje)}
-                            className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all border border-emerald-200"
-                          >
-                            {user.puntaje !== undefined ? 'Editar' : 'Asignar'} Puntaje
-                          </button>
+                          <div className="flex flex-col gap-1">
+                            <button
+                              onClick={() => startEditingPuntaje(user.id, user.puntaje)}
+                              className="px-3 py-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-all border border-emerald-200"
+                            >
+                              {user.puntaje !== undefined ? 'Editar' : 'Asignar'} Puntaje
+                            </button>
+                            <button
+                              onClick={() => startEditingEstado(user.id, user.estado)}
+                              className="px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all border border-blue-200"
+                            >
+                              Cambiar Estado
+                            </button>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -293,7 +433,7 @@ const AdminUserManagement: React.FC<Props> = ({ players, onPlayersUpdate }) => {
 
               {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center gap-3">
                       <AlertCircle size={48} className="text-slate-300" />
                       <p className="text-lg font-medium">No se encontraron usuarios</p>

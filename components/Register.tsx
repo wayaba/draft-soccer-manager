@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react'
-import { Player, PlayerReference, PositionNames, getAvailableSecondaryPositions } from '../types'
+import { Player, PlayerReference, PositionNames, getAvailableSecondaryPositions, EstadoJugador } from '../types'
 import { Trophy, AlertCircle } from 'lucide-react'
 import { validateName, validateBirthDate, validateDNI, validatePhone, validateEmail, FormErrors } from '../utils/validation'
 import { api } from '../services/api'
@@ -20,10 +20,11 @@ const Register: React.FC<Props> = ({ onRegisterSuccess, onBackToLogin }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   // Registration State
-  const [regData, setRegData] = useState<Partial<Player & { password: string }>>({
+  const [regData, setRegData] = useState<Partial<Player & { password: string; isEventual?: boolean }>>({
     primaryPos: 1,
     secondaryPos: 7,
-    reference: 'Otro'
+    reference: 'Otro',
+    isEventual: false
   })
 
   // Función helper para obtener error de un campo específico
@@ -147,10 +148,15 @@ const Register: React.FC<Props> = ({ onRegisterSuccess, onBackToLogin }) => {
       formData.append('password', regData.password || '') // Usar la contraseña del formulario
       formData.append('tipo', 'jugador')
 
-      // Enviar posiciones como números
+      // Enviar posiciones y estado como números
       formData.append('posicionPrimaria', String(regData.primaryPos || 1))
       formData.append('posicionSecundaria', String(regData.secondaryPos || 7))
-      formData.append('isActive', 'true')
+
+      // Agregar estado del jugador
+      const estado = regData.isEventual ? EstadoJugador.EVENTUAL : EstadoJugador.ACTIVO
+      formData.append('estado', String(estado))
+
+      console.log('🎯 Enviando estado:', estado, 'isEventual:', regData.isEventual)
 
       // Agregar imagen si existe
       if (selectedFile) {
@@ -159,29 +165,14 @@ const Register: React.FC<Props> = ({ onRegisterSuccess, onBackToLogin }) => {
 
       const response = await api.registerUser(formData)
 
-      // Crear jugador local con los datos registrados
-      const newPlayer: Player = {
-        id: response.id || crypto.randomUUID(),
-        dni: regData.dni || '',
-        firstName: regData.firstName || '',
-        lastName: regData.lastName || '',
-        birthDate: regData.birthDate || '',
-        phone: regData.phone || '',
-        email: regData.email || '',
-        primaryPos: Number(regData.primaryPos),
-        secondaryPos: Number(regData.secondaryPos),
-        reference: (regData.reference as PlayerReference) || 'Otro',
-        role: 'JUGADOR'
-      }
-
-      // Crear el jugador usando la API directamente
-      await api.createPlayer(newPlayer)
+      console.log('✅ Usuario registrado exitosamente:', response)
 
       // Limpiar formulario
       setRegData({
         primaryPos: 1,
         secondaryPos: 7,
-        reference: 'Otro'
+        reference: 'Otro',
+        isEventual: false
       })
       setPreviewUrl(null)
       setSelectedFile(null)
@@ -212,7 +203,7 @@ const Register: React.FC<Props> = ({ onRegisterSuccess, onBackToLogin }) => {
 
         <div className="p-8">
           <form onSubmit={handleRegisterSubmit} noValidate className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
-            <h3 className="font-black text-slate-800 text-xl mb-4">Crear Cuenta Nueva</h3>
+            <h3 className="font-black text-slate-800 text-xl mb-4">Registrar Jugador</h3>
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <input
@@ -314,6 +305,25 @@ const Register: React.FC<Props> = ({ onRegisterSuccess, onBackToLogin }) => {
                     {getFieldError('phone')}
                   </p>
                 )}
+              </div>
+
+              {/* Checkbox para jugador eventual */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="isEventual"
+                    checked={regData.isEventual || false}
+                    onChange={(e) => setRegData({ ...regData, isEventual: e.target.checked })}
+                    className="w-4 h-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  />
+                  <label htmlFor="isEventual" className="text-xs font-bold text-slate-600 cursor-pointer">
+                    Jugador eventual
+                  </label>
+                </div>
+                <p className="text-xs text-slate-500 ml-7">
+                  Los jugadores eventuales no forman parte del plantel fijo y pueden participar ocasionalmente en los partidos.
+                </p>
               </div>
 
               {/* Photo upload section */}
