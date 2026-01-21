@@ -1,7 +1,9 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Player, PlayerReference, PositionNames, getAvailableSecondaryPositions } from '../types'
-import { Plus, Search, Trash2, UserCircle, Database } from 'lucide-react'
+import { Plus, Search, Trash2, UserCircle, Database, Upload, X, AlertCircle } from 'lucide-react'
 import Avatar from './Avatar'
+import { compressImage, isValidImageFile, formatFileSize } from '../utils/imageUtils'
+import { validatePlayerForm, validateName, validateBirthDate, validateDNI, validatePhone, validateEmail, FormErrors } from '../utils/validation'
 
 interface Props {
   players: Player[]
@@ -55,14 +57,66 @@ const LAST_NAMES = [
 ]
 
 const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePlayer }) => {
+  console.log('🏗️ PlayerRegistration component rendered')
+  console.log('🎮 Props received:', { playersCount: players.length, onAddPlayer: typeof onAddPlayer, onDeletePlayer: typeof onDeletePlayer })
+
   const [searchTerm, setSearchTerm] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string>('')
+  const [isCompressing, setIsCompressing] = useState(false)
+  const [formErrors, setFormErrors] = useState<FormErrors>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const [formData, setFormData] = useState<Partial<Player>>({
     primaryPos: 1,
     secondaryPos: 2,
     reference: 'Otro'
   })
+
+  // Función helper para obtener error de un campo específico
+  const getFieldError = (fieldName: string): string | undefined => {
+    return formErrors[fieldName]
+  }
+
+  // Función para validar un campo específico en tiempo real
+  const validateFieldOnChange = (fieldName: string, value: any) => {
+    let validationResult
+
+    switch (fieldName) {
+      case 'firstName':
+        validationResult = validateName(value, 'El nombre')
+        break
+      case 'lastName':
+        validationResult = validateName(value, 'El apellido')
+        break
+      case 'birthDate':
+        validationResult = validateBirthDate(value)
+        break
+      case 'dni':
+        validationResult = validateDNI(value)
+        break
+      case 'phone':
+        validationResult = validatePhone(value)
+        break
+      case 'email':
+        validationResult = validateEmail(value)
+        break
+      default:
+        return
+    }
+
+    setFormErrors((prev) => {
+      const newErrors = { ...prev }
+      if (validationResult.isValid) {
+        delete newErrors[fieldName]
+      } else {
+        newErrors[fieldName] = validationResult.message!
+      }
+      return newErrors
+    })
+  }
 
   // Función para calcular la edad
   const calculateAge = (birthDate: string): number => {
@@ -79,31 +133,205 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
     return age
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  // Función para manejar la selección de imagen
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
 
-    // Validar que el email esté presente
-    if (!formData.email || formData.email.trim() === '') {
-      alert('El email es obligatorio')
+    // Validar que sea una imagen
+    if (!isValidImageFile(file)) {
+      alert('Por favor selecciona un archivo de imagen válido (JPEG, PNG, WEBP, GIF)')
       return
     }
 
-    const newPlayer: Player = {
-      id: crypto.randomUUID(),
-      dni: formData.dni || '',
-      firstName: formData.firstName || '',
-      lastName: formData.lastName || '',
+    setIsCompressing(true)
+    try {
+      // Comprimir la imagen con límites muy agresivos para evitar errores 413
+      const compressedFile = await compressImage(file, {
+        maxSizeKB: 80, // Límite muy conservador para evitar errores del servidor (límite: 100KB)
+        quality: 0.5, // Calidad reducida para mayor compresión
+        maxWidth: 300, // Máximo 300px de ancho
+        maxHeight: 300 // Máximo 300px de alto
+      })
+
+      // Crear preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const result = e.target?.result as string
+        setImagePreview(result)
+      }
+      reader.readAsDataURL(compressedFile)
+
+      setSelectedImage(compressedFile)
+
+      console.log(`📸 Imagen comprimida:`)
+      console.log(`  Original: ${formatFileSize(file.size)}`)
+      console.log(`  Comprimida: ${formatFileSize(compressedFile.size)}`)
+      console.log(`  Reducción: ${Math.round((1 - compressedFile.size / file.size) * 100)}%`)
+    } catch (error) {
+      console.error('Error al comprimir imagen:', error)
+      alert('Error al procesar la imagen. Por favor intenta con una imagen más pequeña.')
+    } finally {
+      setIsCompressing(false)
+    }
+  }
+
+  // Función para remover imagen seleccionada
+  const handleRemoveImage = () => {
+    setSelectedImage(null)
+    setImagePreview('')
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    console.log('🔥 HANDLESUBMIT EJECUTADO - EVENT:', e)
+    // Prevenir envío del formulario
+    e.preventDefault()
+
+    console.log('🚀 Iniciando validación del formulario...')
+
+    // PASO 1: Preparar datos para validación
+    const dataToValidate = {
+      firstName: formData.firstName?.trim() || '',
+      lastName: formData.lastName?.trim() || '',
       birthDate: formData.birthDate || '',
-      phone: formData.phone || '',
-      email: formData.email || '',
+      dni: formData.dni?.trim() || '',
+      phone: formData.phone?.trim() || '',
+      email: formData.email?.trim() || '',
       primaryPos: Number(formData.primaryPos),
       secondaryPos: Number(formData.secondaryPos),
-      reference: (formData.reference as PlayerReference) || 'Otro',
-      role: 'JUGADOR'
+      reference: formData.reference || 'Otro'
     }
+
+    console.log('📋 Datos a validar:', dataToValidate)
+
+    // PASO 2: Validar TODOS los campos y recopilar errores
+    const validationErrors: FormErrors = {}
+
+    // Validación de nombre
+    const nameValidation = validateName(dataToValidate.firstName, 'El nombre')
+    if (!nameValidation.isValid) {
+      validationErrors.firstName = nameValidation.message!
+      console.log('❌ Error en nombre:', nameValidation.message)
+    }
+
+    // Validación de apellido
+    const lastNameValidation = validateName(dataToValidate.lastName, 'El apellido')
+    if (!lastNameValidation.isValid) {
+      validationErrors.lastName = lastNameValidation.message!
+      console.log('❌ Error en apellido:', lastNameValidation.message)
+    }
+
+    // Validación de fecha de nacimiento
+    const birthDateValidation = validateBirthDate(dataToValidate.birthDate)
+    if (!birthDateValidation.isValid) {
+      validationErrors.birthDate = birthDateValidation.message!
+      console.log('❌ Error en fecha:', birthDateValidation.message)
+    }
+
+    // Validación de DNI
+    const dniValidation = validateDNI(dataToValidate.dni)
+    if (!dniValidation.isValid) {
+      validationErrors.dni = dniValidation.message!
+      console.log('❌ Error en DNI:', dniValidation.message)
+    }
+
+    // Validación de teléfono
+    const phoneValidation = validatePhone(dataToValidate.phone)
+    if (!phoneValidation.isValid) {
+      validationErrors.phone = phoneValidation.message!
+      console.log('❌ Error en teléfono:', phoneValidation.message)
+    }
+
+    // Validación de email
+    const emailValidation = validateEmail(dataToValidate.email)
+    if (!emailValidation.isValid) {
+      validationErrors.email = emailValidation.message!
+      console.log('❌ Error en email:', emailValidation.message)
+    }
+
+    // Validación de posiciones
+    if (dataToValidate.primaryPos === dataToValidate.secondaryPos) {
+      validationErrors.positions = 'Las posiciones primaria y secundaria deben ser diferentes'
+      console.log('❌ Error en posiciones: son iguales')
+    }
+
+    // PASO 3: Si hay errores de validación, mostrarlos y DETENER el proceso
+    if (Object.keys(validationErrors).length > 0) {
+      console.log('🛑 ERRORES ENCONTRADOS - DETENIENDO ENVÍO')
+      console.log('📝 Lista de errores:', validationErrors)
+
+      // Actualizar estado con errores para mostrar en la UI
+      setFormErrors(validationErrors)
+
+      // Opcional: Mostrar alerta con resumen de errores
+      const errorList = Object.values(validationErrors).join('\n• ')
+      alert(`❌ Errores de validación encontrados:\n\n• ${errorList}`)
+
+      // IMPORTANTE: No continuar con el proceso
+      return
+    }
+
+    // PASO 4: Si llegamos aquí, no hay errores de validación
+    console.log('✅ Validación exitosa - Continuando con verificaciones adicionales...')
+
+    // Limpiar errores anteriores
+    setFormErrors({})
+
+    // Iniciar proceso de envío
+    setIsSubmitting(true)
+
+    // Verificar DNI duplicado
+    const existingPlayerDNI = players.find((p) => p.dni === dataToValidate.dni)
+    if (existingPlayerDNI) {
+      console.log('❌ DNI duplicado encontrado')
+      setFormErrors({ dni: 'Ya existe un jugador registrado con ese DNI' })
+      setIsSubmitting(false)
+      alert('Ya existe un jugador registrado con ese DNI')
+      return
+    }
+
+    // Verificar email duplicado
+    const existingPlayerEmail = players.find((p) => p.email.toLowerCase() === dataToValidate.email.toLowerCase())
+    if (existingPlayerEmail) {
+      console.log('❌ Email duplicado encontrado')
+      setFormErrors({ email: 'Ya existe un jugador registrado con ese email' })
+      setIsSubmitting(false)
+      alert('Ya existe un jugador registrado con ese email')
+      return
+    }
+
+    // PASO 5: Todo válido - Crear y agregar jugador
+    console.log('🎉 Todos los campos válidos - Creando jugador...')
+
+    const newPlayer: Player = {
+      id: crypto.randomUUID(),
+      dni: dataToValidate.dni,
+      firstName: dataToValidate.firstName,
+      lastName: dataToValidate.lastName,
+      birthDate: dataToValidate.birthDate,
+      phone: dataToValidate.phone,
+      email: dataToValidate.email,
+      primaryPos: dataToValidate.primaryPos,
+      secondaryPos: dataToValidate.secondaryPos,
+      reference: (dataToValidate.reference as PlayerReference) || 'Otro',
+      role: 'JUGADOR',
+      avatar: imagePreview || undefined
+    }
+
+    console.log('✅ Jugador creado exitosamente:', newPlayer)
+
+    // Ejecutar la acción de agregar jugador (esto sería el "request al backend")
     onAddPlayer(newPlayer)
+
+    // Limpiar formulario después del éxito
     setFormData({ primaryPos: 1, secondaryPos: 2, reference: 'Otro' })
+    setSelectedImage(null)
+    setImagePreview('')
+    setFormErrors({})
+    setIsSubmitting(false)
     setShowForm(false)
+
+    console.log('🏁 Proceso completado exitosamente')
   }
 
   const simulatePlayers = () => {
@@ -135,6 +363,13 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
 
   const filteredPlayers = players.filter((p) => `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) || p.dni.includes(searchTerm))
 
+  console.log('🔄 Component state:', {
+    showForm,
+    isSubmitting,
+    formErrorsCount: Object.keys(formErrors).length,
+    filteredPlayersCount: filteredPlayers.length
+  })
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
@@ -144,15 +379,26 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
         </div>
         <div className="flex gap-3">
           <button
-            disabled
             onClick={simulatePlayers}
             className="bg-slate-100 text-slate-600 px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 hover:bg-slate-200 transition-colors border border-slate-200"
           >
             <Database size={18} /> Simular 20 Jugadores
           </button>
           <button
-            disabled
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => {
+              console.log('📝 Botón "Registrar Jugador" clickeado, showForm actual:', showForm)
+              setShowForm(!showForm)
+              if (!showForm) {
+                // Limpiar errores al abrir el formulario
+                setFormErrors({})
+              } else {
+                // Limpiar formulario y errores al cerrar
+                setFormData({ primaryPos: 1, secondaryPos: 2, reference: 'Otro' })
+                setSelectedImage(null)
+                setImagePreview('')
+                setFormErrors({})
+              }
+            }}
             className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-200"
           >
             {showForm ? (
@@ -168,66 +414,180 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
 
       {showForm && (
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {console.log('📋 Formulario siendo renderizado')}
+          <form onSubmit={handleSubmit} noValidate className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Nombre</label>
-              <input
-                required
-                type="text"
-                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.firstName || ''}
-                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              />
+              <div className="relative">
+                <input
+                  name="firstName"
+                  type="text"
+                  className={`w-full p-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${
+                    getFieldError('firstName') ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                  }`}
+                  value={formData.firstName || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, firstName: value })
+                  }}
+                  placeholder="Ingrese el nombre"
+                />
+                {getFieldError('firstName') && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <AlertCircle size={18} className="text-red-500" />
+                  </div>
+                )}
+              </div>
+              {getFieldError('firstName') && (
+                <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  {getFieldError('firstName')}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Apellido</label>
-              <input
-                required
-                type="text"
-                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.lastName || ''}
-                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              />
+              <div className="relative">
+                <input
+                  name="lastName"
+                  type="text"
+                  className={`w-full p-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${
+                    getFieldError('lastName') ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                  }`}
+                  value={formData.lastName || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, lastName: value })
+                  }}
+                  placeholder="Ingrese el apellido"
+                />
+                {getFieldError('lastName') && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <AlertCircle size={18} className="text-red-500" />
+                  </div>
+                )}
+              </div>
+              {getFieldError('lastName') && (
+                <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  {getFieldError('lastName')}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">DNI</label>
-              <input
-                required
-                type="text"
-                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.dni || ''}
-                onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
-              />
+              <div className="relative">
+                <input
+                  name="dni"
+                  type="text"
+                  className={`w-full p-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${
+                    getFieldError('dni') ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                  }`}
+                  value={formData.dni || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, dni: value })
+                  }}
+                  placeholder="Ej: 12345678"
+                />
+                {getFieldError('dni') && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <AlertCircle size={18} className="text-red-500" />
+                  </div>
+                )}
+              </div>
+              {getFieldError('dni') && (
+                <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  {getFieldError('dni')}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Fecha Nacimiento</label>
-              <input
-                required
-                type="date"
-                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.birthDate || ''}
-                onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-              />
+              <div className="relative">
+                <input
+                  name="birthDate"
+                  type="date"
+                  className={`w-full p-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${
+                    getFieldError('birthDate') ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                  }`}
+                  value={formData.birthDate || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, birthDate: value })
+                  }}
+                />
+                {getFieldError('birthDate') && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <AlertCircle size={18} className="text-red-500" />
+                  </div>
+                )}
+              </div>
+              {getFieldError('birthDate') && (
+                <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  {getFieldError('birthDate')}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Celular</label>
-              <input
-                required
-                type="tel"
-                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.phone || ''}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
+              <div className="relative">
+                <input
+                  name="phone"
+                  type="tel"
+                  className={`w-full p-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${
+                    getFieldError('phone') ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                  }`}
+                  value={formData.phone || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, phone: value })
+                  }}
+                  placeholder="Ej: +54 9 11 1234-5678 ó 1123456789"
+                />
+                {getFieldError('phone') && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <AlertCircle size={18} className="text-red-500" />
+                  </div>
+                )}
+              </div>
+              {getFieldError('phone') && (
+                <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  {getFieldError('phone')}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Email</label>
-              <input
-                required
-                type="email"
-                className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.email || ''}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
+              <div className="relative">
+                <input
+                  name="email"
+                  type="email"
+                  className={`w-full p-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${
+                    getFieldError('email') ? 'border-red-500 bg-red-50' : 'border-slate-200'
+                  }`}
+                  value={formData.email || ''}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, email: value })
+                  }}
+                  placeholder="ejemplo@correo.com"
+                />
+                {getFieldError('email') && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <AlertCircle size={18} className="text-red-500" />
+                  </div>
+                )}
+              </div>
+              {getFieldError('email') && (
+                <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  {getFieldError('email')}
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Posición Primaria</label>
@@ -254,22 +614,129 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700">Posición Secundaria</label>
+              <div className="relative">
+                <select
+                  className={`w-full p-3 rounded-xl border focus:ring-2 focus:ring-emerald-500 outline-none transition-colors ${
+                    formData.primaryPos === formData.secondaryPos ? 'border-yellow-500 bg-yellow-50' : 'border-slate-200'
+                  }`}
+                  value={formData.secondaryPos}
+                  onChange={(e) => setFormData({ ...formData, secondaryPos: Number(e.target.value) })}
+                  disabled={!formData.primaryPos}
+                >
+                  {Object.entries(getAvailableSecondaryPositions(formData.primaryPos || 1)).map(([val, name]) => (
+                    <option key={val} value={val}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                {formData.primaryPos === formData.secondaryPos && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <AlertCircle size={18} className="text-yellow-600" />
+                  </div>
+                )}
+              </div>
+              {formData.primaryPos === formData.secondaryPos && (
+                <p className="text-yellow-600 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={14} />
+                  La posición secundaria debe ser diferente a la primaria
+                </p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Referencia</label>
               <select
                 className="w-full p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none"
-                value={formData.secondaryPos}
-                onChange={(e) => setFormData({ ...formData, secondaryPos: Number(e.target.value) })}
-                disabled={!formData.primaryPos}
+                value={formData.reference}
+                onChange={(e) => setFormData({ ...formData, reference: e.target.value as PlayerReference })}
               >
-                {Object.entries(getAvailableSecondaryPositions(formData.primaryPos || 1)).map(([val, name]) => (
-                  <option key={val} value={val}>
-                    {name}
+                {REFERENCES.map((ref) => (
+                  <option key={ref} value={ref}>
+                    {ref}
                   </option>
                 ))}
               </select>
             </div>
-            <div className="md:col-span-3 pt-4 border-t border-slate-100 flex justify-end">
-              <button type="submit" className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg">
-                Confirmar Alta
+
+            {/* Campo para avatar */}
+            <div className="md:col-span-3 space-y-4 pt-4 border-t border-slate-100">
+              <label className="text-sm font-semibold text-slate-700">Foto del Jugador (Opcional)</label>
+
+              {!imagePreview ? (
+                <div className="flex items-center justify-center w-full">
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      {isCompressing ? (
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <div className="w-5 h-5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                          <span className="text-sm">Comprimiendo imagen...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 mb-2 text-slate-400" />
+                          <p className="mb-2 text-sm text-slate-500">
+                            <span className="font-semibold">Haz clic para subir</span> o arrastra aquí
+                          </p>
+                          <p className="text-xs text-slate-400">PNG, JPG, WEBP (MAX. 80KB - se comprime automáticamente)</p>
+                        </>
+                      )}
+                    </div>
+                    <input type="file" className="hidden" accept="image/*" onChange={handleImageSelect} disabled={isCompressing} />
+                  </label>
+                </div>
+              ) : (
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <img src={imagePreview} alt="Preview" className="w-20 h-20 rounded-full object-cover border-2 border-slate-200" />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-slate-700">Imagen lista</p>
+                    <p className="text-xs text-slate-500">{selectedImage ? formatFileSize(selectedImage.size) : ''}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.createElement('input')
+                        input.type = 'file'
+                        input.accept = 'image/*'
+                        input.onchange = (e) => handleImageSelect(e as any)
+                        input.click()
+                      }}
+                      className="text-emerald-600 hover:text-emerald-700 text-sm font-medium mt-1"
+                    >
+                      Cambiar imagen
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="md:col-span-3 pt-4 border-t border-slate-100 flex justify-between items-center">
+              {Object.keys(formErrors).length > 0 && (
+                <div className="flex items-center gap-2 text-red-600">
+                  <AlertCircle size={16} />
+                  <span className="text-sm font-medium">
+                    {Object.keys(formErrors).length} error{Object.keys(formErrors).length > 1 ? 'es' : ''} de validación
+                  </span>
+                </div>
+              )}
+              <div className="flex-1" />
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                onClick={(e) => {
+                  console.log('🎯 BUTTON CLICKED! Event:', e)
+                  console.log('🔍 Button disabled?', isSubmitting)
+                  console.log('🔍 Form errors:', formErrors)
+                }}
+                className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg disabled:bg-slate-400 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
+              >
+                {isSubmitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {isSubmitting ? 'Registrando...' : 'Confirmar Alta'}
               </button>
             </div>
           </form>
@@ -310,7 +777,7 @@ const PlayerRegistration: React.FC<Props> = ({ players, onAddPlayer, onDeletePla
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center justify-center">
-                        <Avatar src={(p as any).avatar} firstName={p.firstName} lastName={p.lastName} size="lg" />
+                        <Avatar src={p.avatar} firstName={p.firstName} lastName={p.lastName} size="lg" />
                       </div>
                       <div>
                         <p className="font-bold text-slate-800">

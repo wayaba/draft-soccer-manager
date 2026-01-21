@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { Player, PlayerReference, PositionNames, UserRole, getAvailableSecondaryPositions } from '../types'
-import { Trophy, UserPlus, LogIn, ShieldCheck, Database } from 'lucide-react'
+import { Trophy, UserPlus, LogIn, ShieldCheck, Database, AlertCircle } from 'lucide-react'
+import { validateName, validateBirthDate, validateDNI, validatePhone, validateEmail, FormErrors } from '../utils/validation'
 
 interface Props {
   onLogin: (user: Player | 'ADMIN') => void
@@ -17,6 +18,7 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
   const [registerError, setRegisterError] = useState('')
   const [isRegistering2, setIsRegistering2] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+  const [formErrors, setFormErrors] = useState<FormErrors>({})
 
   // Image upload state
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -29,6 +31,11 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
     secondaryPos: 7,
     reference: 'Otro'
   })
+
+  // Función helper para obtener error de un campo específico
+  const getFieldError = (fieldName: string): string | undefined => {
+    return formErrors[fieldName]
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -90,6 +97,91 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    console.log('🚀 Iniciando validación del formulario de registro...')
+
+    // PASO 1: Preparar datos para validación
+    const dataToValidate = {
+      firstName: regData.firstName?.trim() || '',
+      lastName: regData.lastName?.trim() || '',
+      dni: regData.dni?.trim() || '',
+      email: regData.email?.trim() || '',
+      password: regData.password?.trim() || '',
+      birthDate: regData.birthDate || '',
+      phone: regData.phone?.trim() || ''
+    }
+
+    console.log('📋 Datos a validar:', dataToValidate)
+
+    // PASO 2: Validar TODOS los campos y recopilar errores
+    const validationErrors: FormErrors = {}
+
+    // Validación de nombre
+    const nameValidation = validateName(dataToValidate.firstName, 'El nombre')
+    if (!nameValidation.isValid) {
+      validationErrors.firstName = nameValidation.message!
+      console.log('❌ Error en nombre:', nameValidation.message)
+    }
+
+    // Validación de apellido
+    const lastNameValidation = validateName(dataToValidate.lastName, 'El apellido')
+    if (!lastNameValidation.isValid) {
+      validationErrors.lastName = lastNameValidation.message!
+      console.log('❌ Error en apellido:', lastNameValidation.message)
+    }
+
+    // Validación de DNI
+    const dniValidation = validateDNI(dataToValidate.dni)
+    if (!dniValidation.isValid) {
+      validationErrors.dni = dniValidation.message!
+      console.log('❌ Error en DNI:', dniValidation.message)
+    }
+
+    // Validación de email
+    const emailValidation = validateEmail(dataToValidate.email)
+    if (!emailValidation.isValid) {
+      validationErrors.email = emailValidation.message!
+      console.log('❌ Error en email:', emailValidation.message)
+    }
+
+    // Validación de contraseña
+    if (!dataToValidate.password || dataToValidate.password.length < 6) {
+      validationErrors.password = 'La contraseña debe tener al menos 6 caracteres'
+      console.log('❌ Error en contraseña: muy corta')
+    }
+
+    // Validación de fecha de nacimiento
+    const birthDateValidation = validateBirthDate(dataToValidate.birthDate)
+    if (!birthDateValidation.isValid) {
+      validationErrors.birthDate = birthDateValidation.message!
+      console.log('❌ Error en fecha:', birthDateValidation.message)
+    }
+
+    // Validación de teléfono
+    const phoneValidation = validatePhone(dataToValidate.phone)
+    if (!phoneValidation.isValid) {
+      validationErrors.phone = phoneValidation.message!
+      console.log('❌ Error en teléfono:', phoneValidation.message)
+    }
+
+    // PASO 3: Si hay errores de validación, mostrarlos y DETENER el proceso
+    if (Object.keys(validationErrors).length > 0) {
+      console.log('🛑 ERRORES ENCONTRADOS - DETENIENDO ENVÍO')
+      console.log('📝 Lista de errores:', validationErrors)
+
+      // Actualizar estado con errores para mostrar en la UI
+      setFormErrors(validationErrors)
+      setRegisterError('')
+
+      // IMPORTANTE: No continuar con el proceso
+      return
+    }
+
+    // PASO 4: Si llegamos aquí, no hay errores de validación
+    console.log('✅ Validación exitosa - Continuando con registro...')
+
+    // Limpiar errores anteriores
+    setFormErrors({})
     setIsRegistering2(true)
     setRegisterError('')
 
@@ -227,54 +319,110 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
               </div>
             </form>
           ) : (
-            <form onSubmit={handleRegisterSubmit} className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
+            <form onSubmit={handleRegisterSubmit} noValidate className="space-y-4 max-h-[60vh] overflow-y-auto px-1">
               <h3 className="font-black text-slate-800 text-xl mb-4">Registro de Jugador</h3>
               <div className="grid grid-cols-1 gap-4">
-                <input
-                  required
-                  placeholder="Nombre"
-                  className="p-3 bg-slate-50 border rounded-xl"
-                  onChange={(e) => setRegData({ ...regData, firstName: e.target.value })}
-                />
-                <input
-                  required
-                  placeholder="Apellido"
-                  className="p-3 bg-slate-50 border rounded-xl"
-                  onChange={(e) => setRegData({ ...regData, lastName: e.target.value })}
-                />
-                <input
-                  required
-                  placeholder="DNI"
-                  className="p-3 bg-slate-50 border rounded-xl"
-                  onChange={(e) => setRegData({ ...regData, dni: e.target.value })}
-                />
-                <input
-                  required
-                  type="email"
-                  placeholder="Email"
-                  className="p-3 bg-slate-50 border rounded-xl"
-                  onChange={(e) => setRegData({ ...regData, email: e.target.value })}
-                />
-                <input
-                  required
-                  type="password"
-                  placeholder="Contraseña"
-                  className="p-3 bg-slate-50 border rounded-xl"
-                  onChange={(e) => setRegData({ ...regData, password: e.target.value })}
-                />
-                <input
-                  required
-                  type="date"
-                  className="p-3 bg-slate-50 border rounded-xl"
-                  onChange={(e) => setRegData({ ...regData, birthDate: e.target.value })}
-                />
-                <input
-                  required
-                  type="tel"
-                  placeholder="Celular"
-                  className="p-3 bg-slate-50 border rounded-xl"
-                  onChange={(e) => setRegData({ ...regData, phone: e.target.value })}
-                />
+                <div className="space-y-2">
+                  <input
+                    placeholder="Nombre"
+                    className={`p-3 bg-slate-50 border rounded-xl w-full ${getFieldError('firstName') ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    value={regData.firstName || ''}
+                    onChange={(e) => setRegData({ ...regData, firstName: e.target.value })}
+                  />
+                  {getFieldError('firstName') && (
+                    <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      {getFieldError('firstName')}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    placeholder="Apellido"
+                    className={`p-3 bg-slate-50 border rounded-xl w-full ${getFieldError('lastName') ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    value={regData.lastName || ''}
+                    onChange={(e) => setRegData({ ...regData, lastName: e.target.value })}
+                  />
+                  {getFieldError('lastName') && (
+                    <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      {getFieldError('lastName')}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    placeholder="DNI"
+                    className={`p-3 bg-slate-50 border rounded-xl w-full ${getFieldError('dni') ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    value={regData.dni || ''}
+                    onChange={(e) => setRegData({ ...regData, dni: e.target.value })}
+                  />
+                  {getFieldError('dni') && (
+                    <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      {getFieldError('dni')}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    className={`p-3 bg-slate-50 border rounded-xl w-full ${getFieldError('email') ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    value={regData.email || ''}
+                    onChange={(e) => setRegData({ ...regData, email: e.target.value })}
+                  />
+                  {getFieldError('email') && (
+                    <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      {getFieldError('email')}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="password"
+                    placeholder="Contraseña"
+                    className={`p-3 bg-slate-50 border rounded-xl w-full ${getFieldError('password') ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    value={regData.password || ''}
+                    onChange={(e) => setRegData({ ...regData, password: e.target.value })}
+                  />
+                  {getFieldError('password') && (
+                    <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      {getFieldError('password')}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    className={`p-3 bg-slate-50 border rounded-xl w-full ${getFieldError('birthDate') ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    value={regData.birthDate || ''}
+                    onChange={(e) => setRegData({ ...regData, birthDate: e.target.value })}
+                  />
+                  {getFieldError('birthDate') && (
+                    <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      {getFieldError('birthDate')}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input
+                    type="tel"
+                    placeholder="Celular"
+                    className={`p-3 bg-slate-50 border rounded-xl w-full ${getFieldError('phone') ? 'border-red-500 bg-red-50' : 'border-slate-200'}`}
+                    value={regData.phone || ''}
+                    onChange={(e) => setRegData({ ...regData, phone: e.target.value })}
+                  />
+                  {getFieldError('phone') && (
+                    <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+                      <AlertCircle size={14} />
+                      {getFieldError('phone')}
+                    </p>
+                  )}
+                </div>
 
                 {/* Photo upload section */}
                 <div className="space-y-2">
@@ -338,6 +486,14 @@ const Login: React.FC<Props> = ({ onLogin, onRegister, players }) => {
               </div>
               {successMessage && (
                 <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-center font-medium">{successMessage}</div>
+              )}
+              {Object.keys(formErrors).length > 0 && (
+                <div className="flex items-center gap-2 text-red-600 justify-center">
+                  <AlertCircle size={16} />
+                  <span className="text-sm font-medium">
+                    {Object.keys(formErrors).length} error{Object.keys(formErrors).length > 1 ? 'es' : ''} de validación
+                  </span>
+                </div>
               )}
               {registerError && <p className="text-red-500 text-sm font-medium px-1 text-center">{registerError}</p>}
               <button

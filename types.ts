@@ -74,6 +74,7 @@ export interface Player {
   reference: PlayerReference
   teamId?: string
   role: UserRole
+  avatar?: string // URL del avatar o base64 de la imagen
 }
 
 export interface Team {
