@@ -1,3 +1,5 @@
+export type AlertType = 'danger' | 'warning' | 'info' | 'delete'
+
 export enum PosicionJugador {
   ARQUERO = 1,
   DEFENSOR_CENTRAL = 2,
@@ -65,6 +67,12 @@ export const getAvailableSecondaryPositions = (primaryPos: number): Record<numbe
   return positions
 }
 
+export enum TipoRole {
+  ADMIN = 'ADMIN',
+  DELEGADO = 'DELEGADO',
+  JUGADOR = 'JUGADOR'
+}
+
 export type UserRole = 'ADMIN' | 'DELEGADO' | 'JUGADOR'
 
 export type PlayerReference =
@@ -95,7 +103,7 @@ export interface Player {
 }
 
 export interface Team {
-  id: string
+  id?: string
   name: string
   delegateId: string // Referencia al ID del jugador que es delegado
   delegateName: string
